@@ -1,0 +1,119 @@
+import random
+
+import PIL.Image
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+import PIL
+import os
+import keras
+from sklearn.model_selection import train_test_split
+
+
+DATA_PATH = 'D:\cyber\yb project\databases\photos'
+
+
+def get_data(path,val = 0.1):
+    X,y = [],[]
+
+    os.chdir(path+'\Dvir')
+
+    for i,filename in enumerate(os.listdir()):
+        #if '100' in filename:
+        #    break
+        X.append(np.asarray(PIL.Image.open(filename).resize((128,128)).convert('L')))
+        y.append([1,0,0])
+
+        print(filename)
+
+    os.chdir(path+'\Dan')
+
+    for i,filename in enumerate(os.listdir()):
+        #if '100' in filename:
+        #    break
+        X.append(np.asarray(PIL.Image.open(filename).resize((128,128)).convert('L')))
+        y.append([0,1,0])
+
+        print(filename)
+    os.chdir(path+r'\Not Dvir(random pepole)')
+
+    for filename in os.listdir():
+        #if '100' in filename:
+        #    break
+        X.append(np.asarray(PIL.Image.open(filename).resize((128,128)).convert('L')))
+        y.append([0,0,1])
+
+        print(filename)
+
+
+    X = np.array(X)
+    y = np.array(y)
+
+    shuffler = np.random.permutation(len(X))
+    X = X[shuffler]
+    y = y[shuffler]
+
+
+    print(np.shape(X))
+    print(np.shape(y))
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=val)
+
+    return X_train, X_test, y_train, y_test
+
+
+def network(X,y,batch_size):
+    model = keras.Sequential()
+
+    model.add(keras.layers.Dense(128*128,input_shape=(128,128),
+                                 activation='relu'))
+    model.add(keras.layers.Dense(128*128,activation= 'relu'))
+    model.add(keras.layers.Flatten())
+    model.add(keras.layers.Dense(3,activation='softmax'))
+
+    model.summary()
+
+    model.compile(optimizer='adam',metrics=['accuracy'],
+                  loss='CategoricalCrossentropy')
+
+    model.fit(X,y,batch_size=batch_size,epochs = 10)
+
+
+    return model
+
+
+X,X_test,y,y_test = get_data(DATA_PATH,0.15)
+
+
+X_test = np.array(X_test)
+y_test = np.array(y_test)
+
+
+print(np.shape(X))
+print(np.shape(y))
+
+print(np.shape(X_test))
+print(np.shape(y_test))
+
+
+#model = network(X,y,batch_size=64)
+#model.save(r'D:\cyber\yb project\models\model.h5')
+model = keras.models.load_model(r'D:\cyber\yb project\models\model.h5')
+res = model.evaluate(x = X_test,y = y_test)
+print(res)
+
+
+p = r'C:\Users\Dvir hamdi\Pictures\Camera Roll\unknown.png'
+testi = np.asarray(PIL.Image.open(p).resize((128,128)).convert('L'))
+testi = np.reshape(testi,(1,128,128))
+print(np.shape(testi))
+
+res = model.predict(testi)
+print(res)
+print(np.argmax(res))
+#plt.plot(testi[0],cmap = plt.get_cmap('gray'))
+#plt.show()
+
+
+#plt.imshow(X[150],cmap=plt.get_cmap('gray'))
+#plt.show()
