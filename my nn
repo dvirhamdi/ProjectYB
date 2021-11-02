@@ -1,173 +1,126 @@
 import numpy as np
+import HD
+import pickle
+import os
 
-class Danse:
+
+class Danse():
     def __init__(self,n,inputs):
-        #self.inputs = inputs
-        self.weights = np.random.normal(0,0.25,(n,inputs))
-        self.biases = np.zeros((1,n))
 
-        print('weights:',self.weights.shape)
-        print('biases:',self.biases)
+        self.inputs = 0
+        self.weights = 1 * np.random.random((inputs, n)) - 1
+        self.biass = np.zeros((n))
 
-    def culculate(self,x):
-        self.inputs = x
-        return np.dot(x,self.weights) + self.biases
+    def setW(self,W):
+        if self.weights.shape == W.shape:
+            self.weights = W
+        else:
+            raise ValueError('shapes must be the same!')
 
-    # Backward pass
-    def backward(self, dvalues):
-        print('dddddddddgg!!!',self.weights,dvalues)
-        # Gradients on parameters
-        self.dweights = np.dot(self.inputs.T, dvalues)
-        self.dbiases = np.sum(dvalues, axis=0, keepdims=True)
 
-        # Gradient on values
-        self.dinputs = np.dot(dvalues, self.weights)
+    # The Sigmoid function, which describes an S shaped curve.
+    # We pass the weighted sum of the inputs through this function to
+    # normalise them between 0 and 1.
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
 
-        return self.dinputs
 
-    def GetW(self):
-        return self.weights
-
-    def GetB(self):
-        return self.biases
-
-    def GetDW(self):
-        return self.dweights
-
-    def GetDB(self):
-        return self.dbiases
-
-class Activation_Sigmoid:
-
-    # Forward pass
-    def culculate(self, inputs):
-        # Save input and calculate/save output
-        # of the sigmoid function
+    # The neural network thinks.
+    def think(self, inputs):
         self.inputs = inputs
-        self.output = 1 / (1 + np.exp(-inputs))
-
-        return self.output
-
-    # Backward pass
-    def backward(self, dvalues):
-        # Derivative - calculates from output of the sigmoid function
-        self.dinputs = dvalues * (1 - self.output) * self.output
-        return self.dinputs
-
-# Binary cross-entropy loss
-class Loss_BinaryCrossentropy:
-    # Forward pass
-    def culculate(self, y_pred, y_true):
-        # Clip data to prevent division by 0
-        # Clip both sides to not drag mean towards any value
-        y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
-
-        # Calculate sample-wise loss
-        sample_losses = -(y_true * np.log(y_pred_clipped) +
-                          (1 - y_true) * np.log(1 - y_pred_clipped))
-        sample_losses = np.mean(sample_losses, axis=-1)
-
-        # Return losses
-        return sample_losses
+        # Pass inputs through our neural network (our single neuron).
+        return self.sigmoid(np.dot(inputs, self.weights) + self.biass)
 
 
-    # Backward pass
-    def backward(self, dvalues, y_true):
-        # Number of samples
-        samples = len(dvalues)
-
-        # Number of outputs in every sample
-        # We'll use the first sample to count them
-        outputs = len(dvalues[0])
-
-        # Clip data to prevent division by 0
-        # Clip both sides to not drag mean towards any value
-        clipped_dvalues = np.clip(dvalues, 1e-7, 1 - 1e-7)
-
-        # Calculate gradient
-        self.dinputs = -(y_true / clipped_dvalues -
-                         (1 - y_true) / (1 - clipped_dvalues)) / outputs
-
-        # Normalize gradient
-        self.dinputs = self.dinputs / samples
-
-        return self.dinputs
-
-class Adam_Optimizer:
-
-    def __init__(self,lr):
-        self.lr = lr
-
-    def get_parms(self):
-        return self.lr
-
-class Model:
+class Model():
     def __init__(self):
         self.layers = []
 
-    def Add_Danse(self,n,inputs):
-        self.layers.append(Danse(n,inputs))
 
-    def Add_layer(self,layer):
+    def add(self,layer):
         self.layers.append(layer)
+
+
+    def train(self,x,y,epochs = 100):
+        for e in range(epochs):
+            output = self.prdict(x)
+            #output = np.clip(output,1e-5, 1 - 1e-5)
+            print(f'epochs:{e},loss:{self.mse(pred = output,true=y)}')
+            for i,lay in enumerate(reversed(self.layers)):
+
+                error = self.mse(pred = output,true=y)
+
+                lay.weights -= 0.01*(-2*np.dot(lay.inputs.T,(y-output))/y.shape[0])
+                lay.biass -= 0.01*(2*np.sum(y-output)/y.shape[0])
+
+                #print('a',lay.inputs.T,i)
+                output = lay.inputs
+
+
+    def mse(self,pred,true):
+        return np.mean((pred-true)**2)
+
+    def mse_derivative(self,x):
+        pass
 
     def prdict(self,x):
         t = x
         for lay in self.layers:
-            t = lay.culculate(t)
+            t = lay.think(t)
 
         return t
 
-    def train(self,x,y,epochs = 5):
-        for e in range(epochs):
-            self.ChangeWB(x,y)
-
-    def ChangeWB(self,x,y):
-        y_pred = self.prdict(x)
-        dvalues = self.loss_func.backward(y_pred,y)
-
-        #loss = self.a.culculate(x)
-
-        for lay in reversed(self.layers):
-            dvalues = lay.backward(dvalues)
-
-            try:
-                o_w = lay.GetW()
-                #o_w -= lay.GetDW()*self.optimizer.lr what shuld be written
-                print(lay.GetDW().shape,'ggggggggggggggggggggggggg')
-                o_w -= lay.GetDW()*0.1
-
-            except AttributeError:
-                pass
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
 
 
-    def compile(self,loss_func,optimizer = None):
-        self.optimizer = optimizer
-        self.loss_func = loss_func
+    def sigmoid_derivative(self, x):
+        return self.sigmoid(x) * (1 - self.sigmoid(x))
+
+    def evaluate(self,X_test,y_test):
+        print(y_test[0])
+        pred = self.prdict(X_test)
+        pred = np.round(pred)
+
+        score = np.where(pred[0] == np.array(y_test[0]))
+        return len(score[0])/len(y_test[0])
+
+    def save(self,path):
+        W = []
+        for lay in self.layers:
+            W.append(lay.weights)
+
+        pickle.dump(W,open(path+'.p','wb'))
+
+    def load(self,path):
+        W = pickle.load(open(path,'rb'))
+        for i,w in enumerate(W):
+            self.layers[i].setW(w)
 
 
+        
 
-#np.random.seed(1)
-
-x = np.array([[1,1,1],
-     [1,0,1],
-     [1,0,0]])
-
-y = np.array([1,1,1])
-
+layer1 = Danse(n=128,inputs=128*128)
+layer2 =  Danse(n=1,inputs=128)
 model = Model()
-model.Add_Danse(3,3)
-model.Add_layer(Activation_Sigmoid())
-model.Add_Danse(3,1)
-model.Add_layer(Activation_Sigmoid())
 
-model.compile(Loss_BinaryCrossentropy())
-model.train(x,y)
+model.add(layer1)
+model.add(layer2)
 
-out = model.prdict(x)
+X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
 
-loss = Loss_BinaryCrossentropy()
-loss_res = loss.culculate(out,y)
 
-print('loss:',np.mean(loss_res))
-print(out)
+#X_train,X_test = HD.scale_data(X_train,X_test)
+
+
+model.train(X_train,y_train.T,epochs=1000)
+
+
+print('model trained!')
+os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
+
+
+model.save('model')
+model.load('model.p')
+# Test the neural network with a new situations.
+print('acc:',model.evaluate(X_test,y_test)*100,'%')
