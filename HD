@@ -1,0 +1,48 @@
+import PIL.Image
+import os
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+
+def get_data(path,val = 0.1):
+
+    os.chdir(path+r'\\Dvir')
+
+    X,y = [],[]
+    for file in os.listdir():
+        X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
+        y.append(1)
+
+    os.chdir(path+r'\\Dan')
+
+    for file in os.listdir():
+        X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
+        y.append(0)
+
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=val)
+
+    y_train = [y_train]
+    y_test = [y_test]
+
+    X_train, X_test, y_train, y_test = np.array(X_train), np.array(X_test), \
+                                       np.array(y_train), np.array(y_test)
+
+
+
+    return X_train, X_test, y_train, y_test
+
+
+def scale_data(X_train, X_test):
+
+    m = np.max(X_train)
+
+    X_train = X_train / m
+    X_test = X_test / m
+
+    return  X_train, X_test
+
+
+#X_train, X_test, y_train, y_test = get_data(r'D:\cyber\yb project\databases\photos')
+
+#print(scale_data(X_train,X_test))
