@@ -5,17 +5,37 @@ import os
 
 
 class Danse():
-    def __init__(self,n,inputs):
+    def __init__(self, n, inputs,activtion_function = 'linear'):
 
         self.inputs = 0
         self.weights = 1 * np.random.random((inputs, n)) - 1
         self.biass = np.zeros((n))
 
-    def setW(self,W):
+        self.activtion_function = self.set_acti(activtion_function)
+
+    def set_acti(self,activtion_function):
+        if activtion_function == 'sigmoid':
+            self.activtion_function = self.sigmoid
+
+        elif activtion_function == 'soft_max':
+            self.activtion_function = self.soft_max
+
+        elif activtion_function == 'linear':
+            self.activtion_function = self.linear
+
+    def setW(self, W):
         if self.weights.shape == W.shape:
             self.weights = W
         else:
             raise ValueError('shapes must be the same!')
+
+    # calculate the softmax of a vector
+    def soft_max(self,x):
+        e = np.exp(x)
+        return e / e.sum()
+
+    def linear(self,x):
+        return x
 
 
     # The Sigmoid function, which describes an S shaped curve.
@@ -23,7 +43,6 @@ class Danse():
     # normalise them between 0 and 1.
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
-
 
     # The neural network thinks.
     def think(self, inputs):
@@ -35,35 +54,51 @@ class Danse():
 class Model():
     def __init__(self):
         self.layers = []
+        self.loss = None
 
-
-    def add(self,layer):
+    def add(self, layer):
         self.layers.append(layer)
 
-
-    def train(self,x,y,epochs = 100):
+    def train(self, x, y, epochs=100):
         for e in range(epochs):
             output = self.prdict(x)
-            #output = np.clip(output,1e-5, 1 - 1e-5)
-            print(f'epochs:{e},loss:{self.mse(pred = output,true=y)}')
-            for i,lay in enumerate(reversed(self.layers)):
+            # output = np.clip(output,1e-5, 1 - 1e-5)
+            print(f'epochs:{e},loss:{self.loss(pred=output, true=y)}')
 
-                error = self.mse(pred = output,true=y)
+            for i, lay in enumerate(reversed(self.layers)):
+                error = self.loss(pred=output, true=y)
 
-                lay.weights -= 0.01*(-2*np.dot(lay.inputs.T,(y-output))/y.shape[0])
-                lay.biass -= 0.01*(2*np.sum(y-output)/y.shape[0])
+                lay.weights -= 0.01 * (-2 * np.dot(lay.inputs.T, (y - output)) / y.shape[0])
+                lay.biass -= 0.01 * (2 * np.sum(y - output) / y.shape[0])
 
-                #print('a',lay.inputs.T,i)
+                # print('a',lay.inputs.T,i)
                 output = lay.inputs
 
+    def mse(self, pred, true):
+        return np.mean((pred - true) ** 2)
 
-    def mse(self,pred,true):
-        return np.mean((pred-true)**2)
-
-    def mse_derivative(self,x):
+    def mse_derivative(self, x):
         pass
 
-    def prdict(self,x):
+    def softmax_derivative(self,x):
+        SM = x.reshape((-1, 1))
+        jac = np.diagflat(x) - np.dot(SM, SM.T)
+
+    def CrossEntropy(self,pred, true):
+    # calculate cross entropy
+        return -np.sum([true[i] * np.log(pred[i]) for i in range(len(true))])
+
+
+
+    def compile(self,loss):
+        if loss == 'mse':
+            self.loss = self.mse
+
+        if loss == 'crossEntropy':
+            self.loss = self.CrossEntropy
+
+
+    def prdict(self, x):
         t = x
         for lay in self.layers:
             t = lay.think(t)
@@ -73,54 +108,59 @@ class Model():
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
 
-
     def sigmoid_derivative(self, x):
         return self.sigmoid(x) * (1 - self.sigmoid(x))
 
-    def evaluate(self,X_test,y_test):
-        print(y_test[0])
+    def evaluate(self, X_test, y_test):
+        print(y_test)
         pred = self.prdict(X_test)
         pred = np.round(pred)
 
         score = np.where(pred[0] == np.array(y_test[0]))
-        return len(score[0])/len(y_test[0])
+        return len(score[0]) / len(y_test[0])
 
-    def save(self,path):
+    def save(self, path):
         W = []
         for lay in self.layers:
             W.append(lay.weights)
 
-        pickle.dump(W,open(path+'.p','wb'))
+        pickle.dump(W, open(path + '.p', 'wb'))
 
-    def load(self,path):
-        W = pickle.load(open(path,'rb'))
-        for i,w in enumerate(W):
+    def load(self, path):
+        W = pickle.load(open(path, 'rb'))
+        for i, w in enumerate(W):
             self.layers[i].setW(w)
 
 
-        
+X =  np.array([[0,1,1],
+     [1,1,1],
+     [0,1,0]])
 
-layer1 = Danse(n=128,inputs=128*128)
-layer2 =  Danse(n=1,inputs=128)
+y = np.array([[1,0],[0,1],[1,0]])
+
+
+print(y.shape)
+
+layer1 = Danse(n=2, inputs=3,activtion_function = 'soft_max')
+#layer2 = Danse(n=2, inputs=3,activtion_function = 'soft_max')
 model = Model()
 
+
 model.add(layer1)
-model.add(layer2)
+#model.add(layer2)
 
-X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
+#X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
 
+# X_train,X_test = HD.scale_data(X_train,X_test)
 
-#X_train,X_test = HD.scale_data(X_train,X_test)
+model.compile(loss='crossEntropy')
 
-
-model.train(X_train,y_train.T,epochs=1000)
-
+model.train(X, y, epochs=10000)
 
 print('model trained!')
-os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
-
+#os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
 
 model.save('model')
 model.load('model.p')
 # Test the neural network with a new situations.
-print('acc:',model.evaluate(X_test,y_test)*100,'%')
+print('acc:', model.evaluate(X, y) * 100, '%')
