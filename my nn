@@ -1,5 +1,5 @@
 import numpy as np
-import HD
+#import HD
 import pickle
 import os
 
@@ -11,7 +11,7 @@ class Danse():
         self.weights = 1 * np.random.random((inputs, n)) - 1
         self.biass = np.zeros((n))
 
-        self.activtion_function = self.set_acti(activtion_function)
+        self.set_acti(activtion_function)
 
     def set_acti(self,activtion_function):
         if activtion_function == 'sigmoid':
@@ -31,8 +31,14 @@ class Danse():
 
     # calculate the softmax of a vector
     def soft_max(self,x):
+        print('d',x)
         e = np.exp(x)
-        return e / e.sum()
+        print('ddd',np.sum(e,axis=1))
+        d = np.sum(e,axis=1)
+        g = np.array(np.split(d,list(range(0,d.shape[0])))[1:])
+        #g = np.reshape(g,(g.shape[0],g.shape[2]))
+        print('ddddddddddddddddd',g)
+        return e / g
 
     def linear(self,x):
         return x
@@ -48,7 +54,7 @@ class Danse():
     def think(self, inputs):
         self.inputs = inputs
         # Pass inputs through our neural network (our single neuron).
-        return self.sigmoid(np.dot(inputs, self.weights) + self.biass)
+        return self.activtion_function(np.dot(inputs, self.weights) + self.biass)
 
 
 class Model():
@@ -139,7 +145,6 @@ X =  np.array([[0,1,1],
 y = np.array([[1,0],[0,1],[1,0]])
 
 
-print(y.shape)
 
 layer1 = Danse(n=2, inputs=3,activtion_function = 'soft_max')
 #layer2 = Danse(n=2, inputs=3,activtion_function = 'soft_max')
@@ -147,15 +152,16 @@ model = Model()
 
 
 model.add(layer1)
+print('pred',model.prdict(X))
 #model.add(layer2)
 
 #X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
 
 # X_train,X_test = HD.scale_data(X_train,X_test)
 
-model.compile(loss='crossEntropy')
+#model.compile(loss='crossEntropy')
 
-model.train(X, y, epochs=10000)
+#model.train(X, y, epochs=10000)
 
 print('model trained!')
 #os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
