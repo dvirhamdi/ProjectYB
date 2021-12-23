@@ -8,20 +8,24 @@ class Danse():
     def __init__(self, n, inputs,activtion_function = 'linear'):
 
         self.inputs = 0
-        self.weights = 1 * np.random.random((inputs, n)) - 1
+        self.weights = 0.5 * np.random.random((inputs, n)) - 1
         self.biass = np.zeros((n))
 
-        self.set_acti(activtion_function)
+        self.set_acti(activtion_function.lower())
 
     def set_acti(self,activtion_function):
+
         if activtion_function == 'sigmoid':
             self.activtion_function = self.sigmoid
+            self.d_activtion_function = self.sigmoid_derivative
 
         elif activtion_function == 'soft_max':
             self.activtion_function = self.soft_max
+            self.d_activtion_function = self.soft_max_derivative
 
         elif activtion_function == 'linear':
             self.activtion_function = self.linear
+            self.d_activtion_function = self.linear_derivative
 
     def setW(self, W):
         if self.weights.shape == W.shape:
@@ -31,24 +35,49 @@ class Danse():
 
     # calculate the softmax of a vector
     def soft_max(self,x):
-        print('d',x)
+        x = x - np.max(x)
         e = np.exp(x)
-        print('ddd',np.sum(e,axis=1))
         d = np.sum(e,axis=1)
         g = np.array(np.split(d,list(range(0,d.shape[0])))[1:])
-        #g = np.reshape(g,(g.shape[0],g.shape[2]))
-        print('ddddddddddddddddd',g)
         return e / g
+
+
+    def soft_max_derivative(self,x):
+        # Create uninitialized array
+        dinputs = np.zeros(x.shape)
+        # Enumerate outputs and gradients
+        for index, (single_output, single_dvalues) in \
+                enumerate(zip(self.soft_max(x), x)):
+            #print('d',single_dvalues)
+            # Flatten output array
+            single_output = single_output.reshape(-1, 1)
+            # Calculate Jacobian matrix of the output
+            jacobian_matrix = np.diagflat(single_output) - \
+                              np.dot(single_output, single_output.T)
+            # Calculate sample-wise gradient
+            # and add it to the array of sample gradients
+            dinputs[index] = np.dot(jacobian_matrix,single_dvalues)
+
+#        print('d',dinputs)
+
+        return dinputs
 
     def linear(self,x):
         return x
 
+
+    def linear_derivative(self,x,parm = 0):
+        return 1
 
     # The Sigmoid function, which describes an S shaped curve.
     # We pass the weighted sum of the inputs through this function to
     # normalise them between 0 and 1.
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
+
+
+    def sigmoid_derivative(self,x,parm = 0):
+        pass
 
     # The neural network thinks.
     def think(self, inputs):
@@ -67,63 +96,109 @@ class Model():
 
     def train(self, x, y, epochs=100):
         for e in range(epochs):
-            output = self.prdict(x)
+            #print(x.shape)
+            output = self.predict(x)
             # output = np.clip(output,1e-5, 1 - 1e-5)
             print(f'epochs:{e},loss:{self.loss(pred=output, true=y)}')
 
-            for i, lay in enumerate(reversed(self.layers)):
-                error = self.loss(pred=output, true=y)
+            lay = self.layers[0]
+            #print(lay.weights)
+            z = (np.dot(lay.weights.T,lay.inputs)).T
+            z = z + lay.biass
+            res = lay.inputs * lay.d_activtion_function(z)
+            
+            #TODO: need to change all the weights!
+            for i,tay in enumerate(self.layers[1:]):
+                print(i)
+                z = np.dot(tay.weights.T,tay.inputs.T).T
+                z = z + tay.biass
+                res1 = np.dot(tay.weights,tay.d_activtion_function(z).T)
+                res = np.dot(res,res1.T)
 
-                lay.weights -= 0.01 * (-2 * np.dot(lay.inputs.T, (y - output)) / y.shape[0])
-                lay.biass -= 0.01 * (2 * np.sum(y - output) / y.shape[0])
+            #print('dd',np.mean(self.d_loss(output,y),axis=1).shape)
+            #print(res.shape)
+            res = (np.mean(self.d_loss(output,y),axis=1)*res.T)
+            #print(res.shape)
+            print(res)
+            lay.weights -= 0.001 * res.T
+            print(lay.weights)
+            #lay.biass -= 0.01 * (lay.d_activtion_function(lay.inputs,'B'))
 
-                # print('a',lay.inputs.T,i)
-                output = lay.inputs
 
     def mse(self, pred, true):
         return np.mean((pred - true) ** 2)
 
-    def mse_derivative(self, x):
+
+    def mse_derivative(self, pred,true):
         pass
 
-    def softmax_derivative(self,x):
-        SM = x.reshape((-1, 1))
-        jac = np.diagflat(x) - np.dot(SM, SM.T)
 
     def CrossEntropy(self,pred, true):
-    # calculate cross entropy
+        # calculate cross entropy
         return -np.sum([true[i] * np.log(pred[i]) for i in range(len(true))])
 
+
+    def CrossEntropy_derivative(self,pred,true):
+            # Number of samples
+        samples = len(pred)
+        # Number of labels in every sample
+        # We'll use the first sample to count them
+        labels = len(pred[0])
+        # If labels are sparse, turn them into one-hot vector
+        y_true = true
+        if len(true.shape) == 1:
+            y_true = np.eye(labels)[true]
+        # Calculate gradient
+        dinputs = -y_true / pred
+        # Normalize gradient
+        dinputs = dinputs / samples
+        return dinputs
 
 
     def compile(self,loss):
         if loss == 'mse':
             self.loss = self.mse
+            self.d_loss = self.mse_derivative
 
         if loss == 'crossEntropy':
             self.loss = self.CrossEntropy
+            self.d_loss = self.CrossEntropy_derivative
 
 
-    def prdict(self, x):
+    def predict(self, x):
         t = x
         for lay in self.layers:
             t = lay.think(t)
 
         return t
 
+
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
+
 
     def sigmoid_derivative(self, x):
         return self.sigmoid(x) * (1 - self.sigmoid(x))
 
-    def evaluate(self, X_test, y_test):
-        print(y_test)
-        pred = self.prdict(X_test)
-        pred = np.round(pred)
+    # calculate the softmax of a vector
+    def soft_max(self,x):
+        e = np.exp(x)
+        d = np.sum(e,axis=1)
+        g = np.array(np.split(d,list(range(0,d.shape[0])))[1:])
+        return e / g
 
-        score = np.where(pred[0] == np.array(y_test[0]))
-        return len(score[0]) / len(y_test[0])
+
+    def softmax_derivative(self,x):
+        SM = x.reshape((-1, 1))
+        jac = np.diagflat(x) - np.dot(SM, SM.T)
+
+
+    def evaluate(self, X_test, y_test):
+        pred = self.predict(X_test)
+        pred = np.round(pred)
+        score = np.argwhere(np.all(pred == y_test,axis=1))
+        return len(score) / len(y_test)
+
 
     def save(self, path):
         W = []
@@ -132,6 +207,7 @@ class Model():
 
         pickle.dump(W, open(path + '.p', 'wb'))
 
+
     def load(self, path):
         W = pickle.load(open(path, 'rb'))
         for i, w in enumerate(W):
@@ -139,32 +215,39 @@ class Model():
 
 
 X =  np.array([[0,1,1],
-     [1,1,1],
-     [0,1,0]])
+               [1,1,1],
+               [0,1,0]])
 
 y = np.array([[1,0],[0,1],[1,0]])
 
 
-
-layer1 = Danse(n=2, inputs=3,activtion_function = 'soft_max')
-#layer2 = Danse(n=2, inputs=3,activtion_function = 'soft_max')
+layer1 = Danse(n=2, inputs=3,activtion_function = 'linear')
+layer2 = Danse(n=2, inputs=2,activtion_function = 'soft_max')
 model = Model()
 
 
 model.add(layer1)
-print('pred',model.prdict(X))
-#model.add(layer2)
+model.add(layer2)
 
 #X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
-
 # X_train,X_test = HD.scale_data(X_train,X_test)
 
-#model.compile(loss='crossEntropy')
+model.compile(loss='crossEntropy')
+for i in range(1):
+    layer1 = Danse(n=1, inputs=3,activtion_function = 'linear')
+    layer2 = Danse(n=2, inputs=1,activtion_function = 'soft_max')
+    model = Model()
 
-#model.train(X, y, epochs=10000)
+
+    model.add(layer1)
+    model.add(layer2)
+
+    model.compile(loss='crossEntropy')
+    model.train(X, y, epochs=200000)
 
 print('model trained!')
 #os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
+print('pred',model.predict(X))
 
 model.save('model')
 model.load('model.p')
