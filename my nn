@@ -94,7 +94,7 @@ class Danse():
 
 
     def sigmoid_derivative(self,x,parm = 0):
-        pass
+        return 1 / (1 + np.exp(-x)) * (1 - (1 / (1 + np.exp(-x))))
 
     # The neural network thinks.
     def think(self, inputs):
@@ -118,42 +118,44 @@ class Model():
             #print(x.shape)
             output = self.predict(x)
             # output = np.clip(output,1e-5, 1 - 1e-5)
+
+            lr = 0.001
+
             print(f'epochs:{e},loss:{self.loss(pred=output, true=y)}')
 
-            for dlay in range(len(self.layers)):
-                lay = self.layers[dlay]
-                #print(lay.weights.shape,'\n')
-                #print(lay.inputs.shape,'\n')
-                #print(lay.weights)
-                z = np.dot(lay.inputs,lay.weights)
-                #print('z',z.shape,'\n')
-                z = z + lay.biass
+            dC_dpred = np.mean(self.d_loss(pred = output, true = y),axis=0)
+            #print('dC_dpred:',dC_dpred)
+            dpred_da1 = np.mean(self.layers[1].d_activtion_function(output),axis=0)
+            #print('dpred_da1',dpred_da1)
 
-                res = np.dot(lay.inputs,lay.d_activtion_function(x = lay.inputs,z = z))
-                print(res.shape)
-                #print(lay.d_activtion_function(z))
-                #print('resss',res)
-                da = (self.d_loss(output,y) * 0 + 1).T
-                #print(output)
+            da1_dw = np.mean(self.layers[1].d_activtion_function(self.layers[1].weights*self.layers[1].inputs) * \
+                                self.layers[1].inputs,axis=0)
+            dw_dC = dC_dpred * dpred_da1 * da1_dw
 
-                for i,tay in enumerate(self.layers[dlay+1:]):
-                    #print('W',tay.weights.shape,'\n')
-                    #print('i',tay.inputs.shape,'\n')
-                    z = np.dot(tay.weights.T ,tay.inputs.T)
-                    #print('z',z.shape,'\n')
+            self.layers[1].weights -= dw_dC * lr
 
-                    da = tay.d_activtion_function(z)
-                    print('ddd')
+            da1_da2 = np.mean(self.layers[1].d_activtion_function(self.layers[1].weights*self.layers[1].inputs)* \
+                                                            np.sum(self.layers[1].weights))
+            #print('da1_da2',da1_da2)
+            da2_dw = np.mean(self.layers[0].d_activtion_function(self.layers[0].weights * self.layers[0].inputs) * \
+                             self.layers[0].inputs,axis=0)
+            #print('da2_dw',da2_dw)
+            #dz_dw1 = self.layers[0].inputs
+            #print('dz_dw1',dz_dw1)
 
-                if len(self.layers) != 1:
-                    raise
-                    da = np.sum(np.dot(da,self.d_loss(output,y)))
-                    print(res.shape,'res')
-                    res = np.dot(res,da)
+            dw_dC = np.mean(dC_dpred) * np.mean(dpred_da1) * da1_da2 * da2_dw
+            #print('changes:',dw_dC)
+            #print('weights',self.layers[0].weights )
+            self.layers[0].weights = self.layers[0].weights.T
+            self.layers[0].weights -= dw_dC * lr
+            self.layers[0].weights = self.layers[0].weights.T
 
-                #print('res',res)
-                lay.weights -= 0.001 * res
-                #lay.biass -= 0.01 * (lay.d_activtion_function(lay.inputs,'B'))
+
+
+            #print('change of weights:', dw_dC * lr)
+
+
+
 
 
     def mse(self, pred, true):
@@ -161,7 +163,7 @@ class Model():
 
 
     def mse_derivative(self, pred,true):
-        pass
+        return -2*(true - pred)
 
 
     def CrossEntropy(self,pred, true):
@@ -255,19 +257,19 @@ X =  np.array([[0,1,1],
 y = np.array([[1,0],[0,1],[1,0]])
 
 
-layer1 = Danse(n=2, inputs=3,activtion_function = 'soft_max')
-#layer2 = Danse(n=2, inputs=2,activtion_function = 'soft_max')
+layer1 = Danse(n=1, inputs=3,activtion_function = 'linear')
+layer2 = Danse(n=2, inputs=1,activtion_function = 'sigmoid')
 model = Model()
 
 
 model.add(layer1)
-#model.add(layer2)
+model.add(layer2)
 
-#X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
-# X_train,X_test = HD.scale_data(X_train,X_test)
+X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
+X_train,X_test = HD.scale_data(X_train,X_test)
 
 
-model.compile(loss='crossEntropy')
+model.compile(loss='mse')
 model.train(X, y, epochs=100000)
 
 print('model trained!')
