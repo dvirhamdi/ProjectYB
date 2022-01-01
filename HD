@@ -9,16 +9,25 @@ def get_data(path,val = 0.1):
     os.chdir(path+r'\\Dvir')
 
     X,y = [],[]
-    for file in os.listdir():
-        X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
-        y.append(1)
-
-    os.chdir(path+r'\\Dan')
-
-    for file in os.listdir():
+    for file in os.listdir()[:10]:
+        #print(file)
         X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
         y.append(0)
 
+    os.chdir(path+r'\\Dan')
+
+    for file in os.listdir()[:10]:
+        X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
+        y.append(1)
+
+    os.chdir(path+r'\\Ron')
+
+    for file in os.listdir()[:10]:
+        try:
+            X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
+            y.append(2)
+        except:
+            pass
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=val)
 
