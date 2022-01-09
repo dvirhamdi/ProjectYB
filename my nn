@@ -75,6 +75,7 @@ class Danse():
         #print('x',x)
         x -= np.max(x)
         exp_scores = np.exp(x)
+        #print(exp_scores.shape)
         softmax = exp_scores / np.sum(exp_scores,
                                       axis = 1, keepdims = True)
 
@@ -129,6 +130,7 @@ class Danse():
     def think(self, inputs):
         self.inputs = inputs
         self.z = np.dot(inputs, self.weights) + self.biass
+        #print(self.activtion_function)
         self.output = self.activtion_function(self.z)
         # Pass inputs through our neural network (our single neuron).
         return self.output
@@ -150,31 +152,28 @@ class Model():
         start = 0
 
         for e in range(epochs):
-            #print(x.shape)
             output = self.predict(x)
-            #print(output)
-            # output = np.clip(output,1e-5, 1 - 1e-5)
             end = time.time()
             if e %25 == 0:
                 print(f'epochs:{e},loss:{self.loss(pred=output, true=y)},time took{round(start-end,2)} sec')
                 start = time.time()
 
+            #getting the weights and biass
             W1 = self.layers[0].weights
             b1 = self.layers[0].biass
             W2 = self.layers[1].weights
             b2 = self.layers[1].biass
 
-            z1 = self.layers[0].z
-            a1 = self.layers[1].inputs
+            z1 = self.layers[0].z #output of the first layer before activtion function
+            a1 = self.layers[1].inputs #input of the second layer(output of the first)
             delta3 = np.copy(output)
-            delta3[range(x.shape[0]),y] -= 1
+            delta3[range(x.shape[0]),y] -= 1 #derivative of loss function(CrossEntropy)
             dW2 = a1.T.dot(delta3)
             db2 = np.sum(delta3, axis=0, keepdims=False)
             delta2 = delta3.dot(W2.T) * self.layers[0].d_activtion_function(z1)
             dW1 = np.dot(x.T,delta2)
             db1 = np.sum(delta2, axis=0 ,keepdims=False)
 
-            #print(dW1)
 
             W1 -= dW1 * self.lr
             b1 -= db1 * self.lr
@@ -290,52 +289,54 @@ class Model():
             self.layers[i].setW(w)
 
 
-X_train =  np.array([[0,1,1],
-               [1,1,1],
-               [0,1,0],
-               [1,0,1]])
 
-y_train = np.array([0,1,0,1])
-print(y_train.shape,'y')
+if __name__ == '__main__':
+    X_train =  np.array([[0,1,1],
+                   [1,1,1],
+                   [0,1,0],
+                   [1,0,1]])
 
-layer1 = Danse(n=128, inputs=16384,activtion_function = 'tanh')
-layer2 = Danse(n=3, inputs=128,activtion_function = 'soft_max')
-model = Model()
+    y_train = np.array([0,1,0,1])
+    print(y_train.shape,'y')
+
+    layer1 = Danse(n=128, inputs=16384,activtion_function = 'tanh')
+    layer2 = Danse(n=3, inputs=128,activtion_function = 'soft_max')
+    model = Model()
 
 
-model.add(layer1)
-model.add(layer2)
+    model.add(layer1)
+    model.add(layer2)
 
-X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
-X_train,X_test = HD.scale_data(X_train,X_test)
+    X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
+    X_train,X_test = HD.scale_data(X_train,X_test)
 
-print(y_train.shape)
-print(np.max(X_train))
-print(y_train)
-y_train = y_train[0]
+    print(y_train.shape)
+    print(np.max(X_train))
+    print(y_train)
+    y_train = y_train[0]
 
-print('data loaded!')
-print(X_test[0].shape)
-t = np.reshape(X_test[0],(128,128))
-#t *= 255
+    print('data loaded!')
+    print(X_test[0].shape)
+    t = np.reshape(X_test[0],(128,128))
+    #t *= 255
 
-print(t)
-plt.imshow(t)
-plt.show()
+    print(t)
+    plt.imshow(t)
+    plt.show()
 
-model.compile(loss='crossEntropy',lr = 0.0001)
-model.train(X_train, y_train, epochs=100)
+    model.compile(loss='crossEntropy',lr = 0.00001)
+    model.train(X_train, y_train, epochs=1000)
 
-print('model trained!')
-#os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
-print('pred',model.predict(X_test))
+    print('model trained!')
+    #os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
+    print('pred',model.predict(X_test))
 
-#model.save('model')
-#model.load('model.p')
-# Test the neural network with a new situations.
-print('acc:', model.evaluate(X_test, y_test) * 100, '%')
+    model.save(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project\model')
+    #model.load('model.p')
+    # Test the neural network with a new situations.
+    print('acc:', model.evaluate(X_test, y_test) * 100, '%')
 
-print(y_test[0])
-plt.imshow(np.reshape(X_test[0],(128,128)))
-plt.show()
+    print(y_test[0])
+    plt.imshow(np.reshape(X_test[0],(128,128)))
+    plt.show()
 
