@@ -5,6 +5,8 @@ import HD
 import pickle
 import matplotlib.pyplot as plt
 import os
+from numba import jit, cuda
+
 
 #np.random.seed(0)
 
@@ -135,6 +137,12 @@ class Danse():
         # Pass inputs through our neural network (our single neuron).
         return self.output
 
+    def think2(self,inputs):
+        #print(self.activtion_function)
+        self.output = self.activtion_function(np.dot(inputs, self.weights) + self.biass)
+        # Pass inputs through our neural network (our single neuron).
+        return self.output
+
 
 class Model():
     def __init__(self):
@@ -147,44 +155,114 @@ class Model():
     def add(self, layer):
         self.layers.append(layer)
 
-    def train(self, x, y, epochs=100):
+
+    def train(self, x, y, x_val, y_val, epochs=100, batch_size = 4):
         end = 0
         start = 0
 
+
+        #set the firs values for momentum
+        Mdw1,Mdb1 = 0,0
+        Mdw2,Mdb2 = 0,0
+        Mdw3,Mdb3 = 0,0
+
+        #set the first values for RPSProp
+        Vdw1,Vdb1 = 0,0
+        Vdw2,Vdb2 = 0,0
+        Vdw3,Vdb3 = 0,0
+
+        setps = x.shape[0] // batch_size
+        if setps * batch_size < x.shape[0]:
+            setps+=1
+
         for e in range(epochs):
-            output = self.predict(x)
-            end = time.time()
-            if e %25 == 0:
-                print(f'epochs:{e},loss:{self.loss(pred=output, true=y)},time took{round(start-end,2)} sec')
-                start = time.time()
+            shuffler = np.random.permutation(len(y))
+            xs = x[shuffler]
+            ys = y[shuffler]
+            for step in range(setps):
+                x_batch = xs[step*batch_size:(step+1) * batch_size]
+                y_batch = ys[step*batch_size:(step+1) * batch_size]
 
-            #getting the weights and biass
-            W1 = self.layers[0].weights
-            b1 = self.layers[0].biass
-            W2 = self.layers[1].weights
-            b2 = self.layers[1].biass
-
-            z1 = self.layers[0].z #output of the first layer before activtion function
-            a1 = self.layers[1].inputs #input of the second layer(output of the first)
-            delta3 = np.copy(output)
-            delta3[range(x.shape[0]),y] -= 1 #derivative of loss function(CrossEntropy)
-            dW2 = a1.T.dot(delta3)
-            db2 = np.sum(delta3, axis=0, keepdims=False)
-            delta2 = delta3.dot(W2.T) * self.layers[0].d_activtion_function(z1)
-            dW1 = np.dot(x.T,delta2)
-            db1 = np.sum(delta2, axis=0 ,keepdims=False)
+                output = self.predict(x_batch)
+                end = time.time()
+                print(step)
+                if e %5 == 0 and step >= setps-1:
+                    acc = self.evaluate(x_batch,y_batch)
+                    acc_val = self.evaluate(x_val,y_val)
+                    #acc = None
+                    #acc_val = None
+                    print(f'epochs:{e},loss:{self.loss(pred=output, true=y_batch)},'
+                          f'acc:{round(acc*100,2)}%,val acc:{round(acc_val*100,2)}%,'
+                          f'time took{round(start-end,2)} sec')
+                    start = time.time()
 
 
-            W1 -= dW1 * self.lr
-            b1 -= db1 * self.lr
-            W2 -= dW2 * self.lr
-            b2 -= db2 * self.lr
+                #getting the weights and biass
+                W1 = self.layers[0].weights
+                b1 = self.layers[0].biass
+                W2 = self.layers[1].weights
+                b2 = self.layers[1].biass
+                W3 = self.layers[2].weights
+                b3 = self.layers[2].biass
 
-            self.layers[0].setW(W1)
-            self.layers[0].setb(b1)
+                z1 = self.layers[0].z #output of the first layer before activtion function
+                a1 = self.layers[1].inputs #input of the second layer(output of the first)
 
-            self.layers[1].setW(W2)
-            self.layers[1].setb(b2)
+                z2 = self.layers[1].z #output of the first layer before activtion function
+                a2 = self.layers[2].inputs #input of the second layer(output of the first)
+
+                delta3 = np.copy(output)
+
+                delta3[range(x_batch.shape[0]),y_batch] -= 1 #derivative of loss function(CrossEntropy)
+                dW3 = a2.T.dot(delta3)
+                db3 = np.sum(delta3, axis=0, keepdims=False)
+
+                delta2 = delta3.dot(W3.T) * self.layers[1].d_activtion_function(z2)
+                dW2 = np.dot(a1.T,delta2)
+                db2 = np.sum(delta2, axis=0 ,keepdims=False)
+
+                delta1 = delta2.dot(W2.T) * self.layers[0].d_activtion_function(z1)
+                dW1 = np.dot(x_batch.T,delta1)
+                db1 = np.sum(delta1, axis=0 ,keepdims=False)
+
+                #momentum weights
+                Mdw1 = self.beta1 * Mdw1 + (1 - self.beta1) * dW1
+                Mdw2 = self.beta1 * Mdw2 + (1 - self.beta1) * dW2
+                Mdw3 = self.beta1 * Mdw3 + (1 - self.beta1) * dW3
+
+                #momentum biass
+                Mdb1 = self.beta1 * Mdb1 + (1 - self.beta1) * db1
+                Mdb2 = self.beta1 * Mdb2 + (1 - self.beta1) * db2
+                Mdb3 = self.beta1 * Mdb3 + (1 - self.beta1) * db3
+
+                #RPSProp weights
+                Vdw1 = self.beta2 * Vdw1 + (1 - self.beta2) * np.square(dW1)
+                Vdw2 = self.beta2 * Vdw2 + (1 - self.beta2) * np.square(dW2)
+                Vdw3 = self.beta2 * Vdw3 + (1 - self.beta2) * np.square(dW3)
+
+                #RPSProp biass
+                Vdb1 = self.beta2 * Vdb1 + (1 - self.beta2) * np.square(db1)
+                Vdb2 = self.beta2 * Vdb2 + (1 - self.beta2) * np.square(db2)
+                Vdb3 = self.beta2 * Vdb3 + (1 - self.beta2) * np.square(db3)
+
+                W1 -= (Mdw1 * self.lr) / (np.sqrt(Vdw1) + self.epsilon)
+                b1 -= (Mdb1 * self.lr) / (np.sqrt(Vdb1) + self.epsilon)
+
+                W2 -= (Mdw2 * self.lr) / (np.sqrt(Vdw2) + self.epsilon)
+                b2 -= (Mdb2 * self.lr) / (np.sqrt(Vdb2) + self.epsilon)
+
+                W3 -= (Mdw3 * self.lr) / (np.sqrt(Vdw3) + self.epsilon)
+                b3 -= (Mdb3 * self.lr) / (np.sqrt(Vdb3) + self.epsilon)
+
+
+                self.layers[0].setW(W1)
+                self.layers[0].setb(b1)
+
+                self.layers[1].setW(W2)
+                self.layers[1].setb(b2)
+
+                self.layers[2].setW(W3)
+                self.layers[2].setb(b3)
 
 
 
@@ -229,8 +307,11 @@ class Model():
 
 
 
-    def compile(self,loss, lr):
+    def compile(self,loss, lr = 0.0001, beta1 = 0.9, beta2 = 0.999, epsilon = 1e-7):
         self.lr = lr
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.epsilon = epsilon
 
         if loss == 'mse':
             self.loss = self.mse
@@ -248,6 +329,12 @@ class Model():
 
         return t
 
+    def predict2(self,x):
+        t = x
+        for lay in self.layers:
+            t = lay.think2(t)
+
+        return t
 
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
@@ -267,26 +354,36 @@ class Model():
 
 
     def evaluate(self, X_test, y_test):
-        pred = self.predict(X_test)
+        y = np.copy(y_test)
+        if y.shape[0] != 1:
+            y = np.reshape(y,(1,y.shape[0]))
+        x = np.copy(X_test)
+        pred = self.predict2(x)
         pred = np.argmax(pred,axis=1)
-        print(pred)
-        print(y_test[0])
-        score = np.argwhere(pred == y_test[0])
-        return score.shape[0] / y_test.shape[1]
+        score = np.argwhere(pred == y[0])
+        return score.shape[0] / y.shape[1]
 
 
     def save(self, path):
         W = []
+        b = []
         for lay in self.layers:
             W.append(lay.weights)
+            b.append(lay.biass)
 
-        pickle.dump(W, open(path + '.p', 'wb'))
+        prameters = {'w':W,'b':b}
+        pickle.dump(prameters, open(path + '.p', 'wb'))
 
 
     def load(self, path):
-        W = pickle.load(open(path, 'rb'))
-        for i, w in enumerate(W):
-            self.layers[i].setW(w)
+        prameters = pickle.load(open(path, 'rb'))
+        W = prameters['w']
+        B = prameters['b']
+
+        for i,wb in enumerate(zip(W,B)):
+            self.layers[i].setW(wb[0])
+            self.layers[i].setb(wb[1])
+
 
 
 
@@ -299,33 +396,40 @@ if __name__ == '__main__':
     y_train = np.array([0,1,0,1])
     print(y_train.shape,'y')
 
-    layer1 = Danse(n=128, inputs=16384,activtion_function = 'tanh')
-    layer2 = Danse(n=3, inputs=128,activtion_function = 'soft_max')
-    model = Model()
 
 
-    model.add(layer1)
-    model.add(layer2)
-
-    X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos')
+    X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos\test',
+                                                   val= 0.3,n = 4, j = -1)
     X_train,X_test = HD.scale_data(X_train,X_test)
 
     print(y_train.shape)
-    print(np.max(X_train))
     print(y_train)
     y_train = y_train[0]
+
+    print(X_train.shape,y_train.shape)
 
     print('data loaded!')
     print(X_test[0].shape)
     t = np.reshape(X_test[0],(128,128))
     #t *= 255
 
-    print(t)
+    print(np.max(y_train)+1)
     plt.imshow(t)
     plt.show()
 
+    layer1 = Danse(n=16384//2, inputs=16384,activtion_function = 'relu')
+    layer2 = Danse(n=256, inputs=16384//2,activtion_function = 'relu')
+    layer3 = Danse(n=np.max(y_train)+1, inputs=256,activtion_function = 'soft_max')
+    model = Model()
+
+
+    model.add(layer1)
+    model.add(layer2)
+    model.add(layer3)
+
+    #model.load(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project\model.p')
     model.compile(loss='crossEntropy',lr = 0.00001)
-    model.train(X_train, y_train, epochs=1000)
+    model.train(X_train, y_train,X_test,y_test, epochs=100,batch_size=2048)
 
     print('model trained!')
     #os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
