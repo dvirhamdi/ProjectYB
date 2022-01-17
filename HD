@@ -2,32 +2,43 @@ import PIL.Image
 import os
 import numpy as np
 from sklearn.model_selection import train_test_split
+import cv2
+import mediapipe as mp
 
+def get_data(path,val = 0.1, n = -1,j = -1):
 
-def get_data(path,val = 0.1):
-
-    os.chdir(path+r'\\Dvir')
+    os.chdir(path)
 
     X,y = [],[]
-    for file in os.listdir()[:10]:
-        #print(file)
-        X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
-        y.append(0)
+    for i,user in enumerate(os.listdir()[:n]):
+        for file in os.listdir(path+f'\\{user}')[:j]:
+            try:
+                os.chdir(path+f'\\{user}')
+                img = np.array((PIL.Image.open(file)))
+                #img = np.reshape(img,(1,img.shape[0],img.shape[1],img.shape[2]))
+                img = face_dedection(img)
+                try:
+                    if img[0].any():
+                        #print(np.shape(img[0]))
+                        X.append(img[0])
+                        y.append(i)
+                except AttributeError:
+                    pass
+            except PermissionError:
+                pass
 
-    os.chdir(path+r'\\Dan')
 
-    for file in os.listdir()[:10]:
-        X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
-        y.append(1)
+        print(np.shape(X))
 
-    os.chdir(path+r'\\Ron')
+        a = os.listdir(path+f'\\{user}')[:j]
+        print(f'{user}:{len(a)}')
 
-    for file in os.listdir()[:10]:
-        try:
-            X.append(np.reshape(np.array((PIL.Image.open(file).resize((128,128)).convert('L'))),(128*128,)))
-            y.append(2)
-        except:
-            pass
+    #print(X)
+    X = np.array(X)
+    y = np.array(y)
+    print('total data:',X.shape[0])
+    X = np.reshape(X,(X.shape[0],128*128))
+    #X = face_dedection(X)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=val)
 
@@ -42,6 +53,52 @@ def get_data(path,val = 0.1):
     return X_train, X_test, y_train, y_test
 
 
+def face_dedection(image):
+    mp_face_detection = mp.solutions.face_detection
+    mp_drawing = mp.solutions.drawing_utils
+
+    #cap = cv2.VideoCapture(0)
+    #ret, frame = cap.read()
+
+    faces = []
+    with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.4) as face_detection:
+        count = 0
+        fails_Count = 0
+        if True:
+            #print(image.shape)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            results = face_detection.process(image)
+
+            h, w, c = image.shape
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            if results.detections:
+                xmin = int(results.detections[0].location_data.relative_bounding_box.xmin * w)
+                ymin = int(results.detections[0].location_data.relative_bounding_box.ymin * h)
+                width = int(results.detections[0].location_data.relative_bounding_box.width * w)
+                height = int(results.detections[0].location_data.relative_bounding_box.height * h)
+
+                image = image[ymin:ymin+height, xmin:xmin+width]
+                try:
+                    image = cv2.resize(image, (128,128), interpolation = cv2.INTER_AREA)
+                except cv2.error:
+                    fails_Count+=1
+
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+
+                faces.append(image)
+                count+=1
+                #cv2.imshow('Face Detection', image)
+                #cv2.waitKey(0)
+            else:
+                return [False]
+
+        #print(f'recognize {count} faces from {data[0].shape[0]}')
+        #print(f'failed images {fails_Count} from {data[0].shape[0]}')
+        #faces = np.array(faces)
+        return faces
+
 def scale_data(X_train, X_test):
 
     m = np.max(X_train)
@@ -51,7 +108,9 @@ def scale_data(X_train, X_test):
 
     return  X_train, X_test
 
-
-#X_train, X_test, y_train, y_test = get_data(r'D:\cyber\yb project\databases\photos')
-
-#print(scale_data(X_train,X_test))
+if __name__ == '__main__':
+    X_train, X_test, y_train, y_test = get_data(r'D:\cyber\yb project\databases\photos\test',n = 5,j = 10)
+    print(X_train.shape)
+    #print(X_train)
+    #face_dedection(X_train)
+    print(scale_data(X_train,X_test))
