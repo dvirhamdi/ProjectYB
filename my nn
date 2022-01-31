@@ -156,7 +156,7 @@ class Model():
         self.layers.append(layer)
 
 
-    def train(self, x, y, x_val, y_val, epochs=100, batch_size = 4):
+    def train(self, x, y, x_val, y_val, epochs=100, batch_size = 4 , print_evry = 25 , check_point_path = None ):
         end = 0
         start = 0
 
@@ -185,8 +185,7 @@ class Model():
 
                 output = self.predict(x_batch)
                 end = time.time()
-                print(step)
-                if e %5 == 0 and step >= setps-1:
+                if e % print_evry == 0 and step >= setps-1:
                     acc = self.evaluate(x_batch,y_batch)
                     acc_val = self.evaluate(x_val,y_val)
                     #acc = None
@@ -194,6 +193,8 @@ class Model():
                     print(f'epochs:{e},loss:{self.loss(pred=output, true=y_batch)},'
                           f'acc:{round(acc*100,2)}%,val acc:{round(acc_val*100,2)}%,'
                           f'time took{round(start-end,2)} sec')
+                    if (check_point_path is not None and e % 2*print_evry == 0):
+                        self.save(f'{check_point_path}+{e}')
                     start = time.time()
 
 
@@ -307,7 +308,7 @@ class Model():
 
 
 
-    def compile(self,loss, lr = 0.0001, beta1 = 0.9, beta2 = 0.999, epsilon = 1e-7):
+    def compile(self,loss, lr = 0.001, beta1 = 0.9, beta2 = 0.999, epsilon = 1e-7):
         self.lr = lr
         self.beta1 = beta1
         self.beta2 = beta2
@@ -398,8 +399,8 @@ if __name__ == '__main__':
 
 
 
-    X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos\test',
-                                                   val= 0.3,n = 4, j = -1)
+    X_train, X_test, y_train, y_test = HD.get_data(r'D:\cyber\yb project\databases\photos\test\5 p',
+                                                   val= 0.3,n = 5, j = -1)
     X_train,X_test = HD.scale_data(X_train,X_test)
 
     print(y_train.shape)
@@ -417,8 +418,8 @@ if __name__ == '__main__':
     plt.imshow(t)
     plt.show()
 
-    layer1 = Danse(n=16384//2, inputs=16384,activtion_function = 'relu')
-    layer2 = Danse(n=256, inputs=16384//2,activtion_function = 'relu')
+    layer1 = Danse(n=16384//3, inputs=16384,activtion_function = 'relu')
+    layer2 = Danse(n=256, inputs=16384//3,activtion_function = 'relu')
     layer3 = Danse(n=np.max(y_train)+1, inputs=256,activtion_function = 'soft_max')
     model = Model()
 
@@ -427,9 +428,11 @@ if __name__ == '__main__':
     model.add(layer2)
     model.add(layer3)
 
-    #model.load(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project\model.p')
+    ch_path = r'D:\cyber'
+    model.load(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project\model.p')
     model.compile(loss='crossEntropy',lr = 0.00001)
-    model.train(X_train, y_train,X_test,y_test, epochs=100,batch_size=2048)
+    model.train(X_train, y_train,X_test,y_test, epochs=300,batch_size=1024,
+                print_evry=5,check_point_path= ch_path)
 
     print('model trained!')
     #os.chdir(r'C:\Users\Dvir hamdi\PycharmProjects\cyberHW\yodbet project')
